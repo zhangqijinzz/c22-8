@@ -1,4 +1,5 @@
 import { defaultSample } from '../../domain/conditionEvaluator';
+import { reconcileSnapshot } from '../../domain/conditionReconciliation';
 import type { FieldType, RuleField } from '../../models/ruleModel';
 import type { WorkspacePort } from '../../viewmodels/workspacePort';
 
@@ -25,7 +26,11 @@ export class FieldsViewModel {
     const project = this.workspace.getSnapshot().project;
     if (!project) return;
     const fields = project.fields.map((field) => field.id === fieldId ? { ...field, ...updates } : field);
-    this.workspace.commitProject({ ...project, fields }, '字段已更新，检查结果将自动刷新');
+    const { snapshot, adjustments } = reconcileSnapshot({ ...project, fields });
+    const notice = adjustments.length
+      ? `字段已更新，${adjustments.length} 处失效选项引用已对齐：${adjustments[0]}${adjustments.length > 1 ? ' 等' : ''}`
+      : '字段已更新，检查结果将自动刷新';
+    this.workspace.commitProject(snapshot, notice);
   }
 
   removeField(fieldId: string): boolean {

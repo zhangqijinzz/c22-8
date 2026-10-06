@@ -55,16 +55,22 @@ function ConditionRow({ field, fields, condition, onFieldChange, onChange, onRem
   if (!field) return <div className="condition-row condition-error"><span>引用字段已删除</span><button className="icon-button" onClick={onRemove}>×</button></div>;
   const numeric = field.type === 'number';
   const enumField = field.type === 'enum';
+  const staleEnumValue = enumField && typeof condition.value === 'string' && !(field.enumValues ?? []).includes(condition.value)
+    ? condition.value
+    : undefined;
   const operatorOptions = numeric
     ? [['gt', '大于'], ['gte', '大于等于'], ['lt', '小于'], ['lte', '小于等于'], ['eq', '等于'], ['between', '介于']]
     : enumField ? [['eq', '等于'], ['notEq', '不等于']] : [['isTrue', '为真'], ['isFalse', '为假']];
   return (
-    <div className="condition-row">
-      <select aria-label="条件字段" value={field.id} onChange={(event) => onFieldChange(event.target.value)}>{fields.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-      <select aria-label="比较方式" value={condition.operator} onChange={(event) => onChange(changeOperator(condition, event.target.value, field))}>{operatorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      {numeric && condition.operator === 'between' && isNumberRange(condition.value) ? <div className="condition-range"><input aria-label="条件起点" type="number" value={condition.value.min} onChange={(event) => onChange({ ...condition, value: { ...condition.value, min: Number(event.target.value) } })} /><span>至</span><input aria-label="条件终点" type="number" value={condition.value.max} onChange={(event) => onChange({ ...condition, value: { ...condition.value, max: Number(event.target.value) } })} /></div> : numeric ? <input aria-label="条件数值" type="number" value={typeof condition.value === 'number' ? condition.value : ''} onChange={(event) => onChange({ ...condition, value: Number(event.target.value) } as PredicateCondition)} /> : enumField && typeof condition.value === 'string' ? <select aria-label="条件枚举值" value={condition.value} onChange={(event) => onChange({ ...condition, value: event.target.value } as PredicateCondition)}>{(field.enumValues ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</select> : <span className="boolean-value">{condition.operator === 'isTrue' ? '是' : '否'}</span>}
-      <button className="icon-button condition-remove" aria-label="移除此条件" onClick={onRemove}>×</button>
-    </div>
+    <>
+      <div className="condition-row">
+        <select aria-label="条件字段" value={field.id} onChange={(event) => onFieldChange(event.target.value)}>{fields.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <select aria-label="比较方式" value={condition.operator} onChange={(event) => onChange(changeOperator(condition, event.target.value, field))}>{operatorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        {numeric && condition.operator === 'between' && isNumberRange(condition.value) ? <div className="condition-range"><input aria-label="条件起点" type="number" value={condition.value.min} onChange={(event) => onChange({ ...condition, value: { ...condition.value, min: Number(event.target.value) } })} /><span>至</span><input aria-label="条件终点" type="number" value={condition.value.max} onChange={(event) => onChange({ ...condition, value: { ...condition.value, max: Number(event.target.value) } })} /></div> : numeric ? <input aria-label="条件数值" type="number" value={typeof condition.value === 'number' ? condition.value : ''} onChange={(event) => onChange({ ...condition, value: Number(event.target.value) } as PredicateCondition)} /> : enumField && typeof condition.value === 'string' ? <select aria-label="条件枚举值" className={staleEnumValue !== undefined ? 'stale-value' : undefined} value={condition.value} onChange={(event) => onChange({ ...condition, value: event.target.value } as PredicateCondition)}>{staleEnumValue !== undefined && <option value={staleEnumValue}>已失效选项：{staleEnumValue || '（空值）'}</option>}{(field.enumValues ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</select> : <span className="boolean-value">{condition.operator === 'isTrue' ? '是' : '否'}</span>}
+        <button className="icon-button condition-remove" aria-label="移除此条件" onClick={onRemove}>×</button>
+      </div>
+      {staleEnumValue !== undefined && <div className="condition-invalid-note" role="alert">“{field.name}”的选项“{staleEnumValue || '（空值）'}”已被移除或改名，此条件仍按该失效值判断，请重新选择有效选项。</div>}
+    </>
   );
 }
 

@@ -1,5 +1,6 @@
 import type { BusinessRule, RuleField, RuleProject, RuleVersion, WorkspaceDocument } from '../models/ruleModel';
 import { defaultSample } from '../domain/conditionEvaluator';
+import { reconcileSnapshot } from '../domain/conditionReconciliation';
 import { ProjectStorageService } from '../services/projectStorageService';
 
 export class RuleRepository {
@@ -35,15 +36,16 @@ function decodeProject(value: unknown): RuleProject | null {
   const versionsValue = Array.isArray(value.versions) ? value.versions : [];
   const versions = versionsValue.filter(isRuleVersion);
   if (versions.length !== versionsValue.length) return null;
-  const project: RuleProject = {
+  // 已保存的项目与版本快照按同一口径对齐失效的枚举引用，保证恢复后的数据可判断、可复现。
+  const project: RuleProject = reconcileSnapshot({
     id: value.id,
     title: value.title,
     fields,
     rules,
     sampleInputs: isRecord(value.sampleInputs) ? value.sampleInputs as RuleProject['sampleInputs'] : defaultSample(fields),
-    versions,
+    versions: versions.map((version) => reconcileSnapshot(version).snapshot),
     updatedAt: value.updatedAt,
-  };
+  }).snapshot;
   if (typeof value.frozenVersionId === 'string') project.frozenVersionId = value.frozenVersionId;
   return project;
 }
