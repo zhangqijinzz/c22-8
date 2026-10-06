@@ -192,6 +192,19 @@ button:disabled { cursor: not-allowed !important; opacity: .5; }
 .condition-range input { min-width: 0; height: 27px; padding: 0 6px; }
 .condition-remove { color: #adb8b3; }
 .condition-error { display: flex; justify-content: space-between; padding: 7px 9px; border-radius: 5px; background: #fff8f4; color: #b77668; font-size: 9px; }
+.condition-row-block.has-stale { margin-top: 6px; padding: 4px 5px 5px; border: 1px solid #f0d5cd; border-radius: 6px; background: #fff9f6; }
+.condition-row-block .condition-row { margin-top: 0; }
+.select-invalid { border-color: #d98b76 !important; background: #fdf1ec !important; color: #b0614e !important; font-weight: 650; }
+.stale-hint { display: flex; align-items: flex-start; gap: 7px; margin-top: 5px; padding: 2px 1px 0; color: #a76a56; }
+.stale-hint-icon { flex: 0 0 14px; width: 14px; height: 14px; display: grid; place-items: center; margin-top: 1px; border-radius: 50%; background: #f4ddd4; color: #b0614e; font: 8px Georgia, serif; }
+.stale-hint-copy { flex: 1; min-width: 0; }
+.stale-hint-copy strong { display: block; color: #a45f4c; font-size: 8px; font-weight: 700; }
+.stale-hint-copy span { display: block; margin-top: 2px; color: #b78574; font-size: 7px; line-height: 1.5; }
+.stale-align { flex: 0 0 auto; padding-top: 1px; color: #b0614e; font-size: 8px; white-space: nowrap; }
+.stale-align:hover:not(:disabled) { color: #8f4a39; }
+.stale-align:disabled { color: #caa498; cursor: not-allowed; text-decoration: none; }
+.sample-field-stale select { border-color: #d98b76; }
+.stale-field-note { color: #b0614e !important; font-size: 7px !important; line-height: 1.5; }
 .nested-condition { margin: 6px 0; padding: 7px 9px; border: 1px dashed #dce6e0; border-radius: 5px; color: #6c8879; font-size: 9px; }
 .boolean-value { display: flex; align-items: center; height: 27px; padding: 0 9px; border: 1px solid #e4ebe7; border-radius: 5px; background: #fbfcfb; color: #628872; font-size: 9px; }
 .add-condition { margin-top: 8px; }
@@ -317,6 +330,7 @@ button:disabled { cursor: not-allowed !important; opacity: .5; }
 .version-copy { flex: 1; min-width: 0; }
 .version-copy strong { display: flex; align-items: center; gap: 6px; color: #5a6b63; font-size: 8px; }
 .version-copy em { padding: 2px 4px; border-radius: 3px; background: #e6f2e8; color: #59846b; font-size: 6px; font-style: normal; }
+.version-copy em.version-stale { background: #fbe9e2; color: #b0614e; }
 .version-copy > span { display: block; margin-top: 3px; color: #a0aca6; font-size: 7px; }
 .version-actions { display: flex; align-items: center; gap: 12px; }
 .version-actions .text-button { color: #72917f; font-size: 8px; }

@@ -1,5 +1,7 @@
 import type { BusinessRule, PredicateCondition, RuleField } from '../../models/ruleModel';
 import type { WorkspaceState } from '../../viewmodels/workspaceViewModel';
+import type { StaleEnumReference } from '../../domain/referenceIntegrity';
+import { findStaleEnumReferences } from '../../domain/referenceIntegrity';
 import type { RulesViewModel } from './rulesViewModel';
 
 interface RulesViewProps { state: WorkspaceState; viewModel: RulesViewModel }
@@ -29,6 +31,10 @@ interface RuleCardProps { rule: BusinessRule; index: number; fields: RuleField[]
 
 function RuleCard({ rule, index, fields, selected, viewModel }: RuleCardProps) {
   const updateCondition = (conditionIndex: number, condition: PredicateCondition) => viewModel.updateCondition(rule.id, conditionIndex, condition);
+  // 以条件路径为键标记失效的枚举引用：选项改名/删除后，界面必须如实显示旧值而不是伪装成其它合法选项
+  const staleByPath = new Map<string, StaleEnumReference>(
+    findStaleEnumReferences([rule], fields).map((reference) => [reference.path.join('.'), reference]),
+  );
   return (
     <article data-rule-id={rule.id} className={`rule-card card-surface${selected ? ' rule-card-selected' : ''}`} onFocus={() => viewModel.selectRule(rule.id)}>
       <header className="rule-card-header">
@@ -40,7 +46,7 @@ function RuleCard({ rule, index, fields, selected, viewModel }: RuleCardProps) {
       <div className="condition-area">
         <div className="condition-title"><span>满足以下条件</span><select aria-label={`${rule.name}条件组合`} value={rule.conditions.operator} onChange={(event) => viewModel.setGroupOperator(rule.id, event.target.value as 'and' | 'or')}><option value="and">全部满足 · AND</option><option value="or">任一满足 · OR</option></select></div>
         {rule.conditions.conditions.map((condition, conditionIndex) => condition.kind === 'predicate' ? (
-          <ConditionRow key={`${rule.id}-${conditionIndex}`} field={fields.find((candidate) => candidate.id === condition.fieldId)} fields={fields} condition={condition} onFieldChange={(fieldId) => viewModel.changeConditionField(rule.id, conditionIndex, fieldId)} onChange={(next) => updateCondition(conditionIndex, next)} onRemove={() => viewModel.removeCondition(rule.id, conditionIndex)} />
+          <ConditionRow key={`${rule.id}-${conditionIndex}`} field={fields.find((candidate) => candidate.id === condition.fieldId)} fields={fields} condition={condition} stale={staleByPath.get(String(conditionIndex))} onFieldChange={(fieldId) => viewModel.changeConditionField(rule.id, conditionIndex, fieldId)} onChange={(next) => updateCondition(conditionIndex, next)} onRemove={() => viewModel.removeCondition(rule.id, conditionIndex)} />
         ) : <div className="nested-condition" key={`${rule.id}-${conditionIndex}`}>条件组 · {condition.operator.toUpperCase()} ({condition.conditions.length} 项)</div>)}
         <button className="text-button add-condition" disabled={fields.length === 0} onClick={() => viewModel.addCondition(rule.id)}>＋ 添加条件</button>
       </div>
@@ -49,21 +55,28 @@ function RuleCard({ rule, index, fields, selected, viewModel }: RuleCardProps) {
   );
 }
 
-interface ConditionRowProps { field?: RuleField; fields: RuleField[]; condition: PredicateCondition; onFieldChange: (fieldId: string) => void; onChange: (condition: PredicateCondition) => void; onRemove: () => void }
+interface ConditionRowProps { field?: RuleField; fields: RuleField[]; condition: PredicateCondition; stale?: StaleEnumReference; onFieldChange: (fieldId: string) => void; onChange: (condition: PredicateCondition) => void; onRemove: () => void }
 
-function ConditionRow({ field, fields, condition, onFieldChange, onChange, onRemove }: ConditionRowProps) {
-  if (!field) return <div className="condition-row condition-error"><span>引用字段已删除</span><button className="icon-button" onClick={onRemove}>×</button></div>;
+function ConditionRow({ field, fields, condition, stale, onFieldChange, onChange, onRemove }: ConditionRowProps) {
+  if (!field) return <div className="condition-row condition-error"><span>引用字段已删除，请改选字段或移除此条件</span><button className="icon-button" onClick={onRemove}>×</button></div>;
   const numeric = field.type === 'number';
   const enumField = field.type === 'enum';
   const operatorOptions = numeric
     ? [['gt', '大于'], ['gte', '大于等于'], ['lt', '小于'], ['lte', '小于等于'], ['eq', '等于'], ['between', '介于']]
     : enumField ? [['eq', '等于'], ['notEq', '不等于']] : [['isTrue', '为真'], ['isFalse', '为假']];
+  const enumOptions = field.enumValues ?? [];
+  const staleValue = enumField && typeof condition.value === 'string' ? condition.value : '';
   return (
-    <div className="condition-row">
-      <select aria-label="条件字段" value={field.id} onChange={(event) => onFieldChange(event.target.value)}>{fields.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
-      <select aria-label="比较方式" value={condition.operator} onChange={(event) => onChange(changeOperator(condition, event.target.value, field))}>{operatorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
-      {numeric && condition.operator === 'between' && isNumberRange(condition.value) ? <div className="condition-range"><input aria-label="条件起点" type="number" value={condition.value.min} onChange={(event) => onChange({ ...condition, value: { ...condition.value, min: Number(event.target.value) } })} /><span>至</span><input aria-label="条件终点" type="number" value={condition.value.max} onChange={(event) => onChange({ ...condition, value: { ...condition.value, max: Number(event.target.value) } })} /></div> : numeric ? <input aria-label="条件数值" type="number" value={typeof condition.value === 'number' ? condition.value : ''} onChange={(event) => onChange({ ...condition, value: Number(event.target.value) } as PredicateCondition)} /> : enumField && typeof condition.value === 'string' ? <select aria-label="条件枚举值" value={condition.value} onChange={(event) => onChange({ ...condition, value: event.target.value } as PredicateCondition)}>{(field.enumValues ?? []).map((value) => <option key={value} value={value}>{value}</option>)}</select> : <span className="boolean-value">{condition.operator === 'isTrue' ? '是' : '否'}</span>}
-      <button className="icon-button condition-remove" aria-label="移除此条件" onClick={onRemove}>×</button>
+    <div className={`condition-row-block${stale ? ' has-stale' : ''}`}>
+      <div className="condition-row">
+        <select aria-label="条件字段" value={field.id} onChange={(event) => onFieldChange(event.target.value)}>{fields.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <select aria-label="比较方式" value={condition.operator} onChange={(event) => onChange(changeOperator(condition, event.target.value, field))}>{operatorOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select>
+        {numeric && condition.operator === 'between' && isNumberRange(condition.value) ? <div className="condition-range"><input aria-label="条件起点" type="number" value={condition.value.min} onChange={(event) => onChange({ ...condition, value: { ...condition.value, min: Number(event.target.value) } })} /><span>至</span><input aria-label="条件终点" type="number" value={condition.value.max} onChange={(event) => onChange({ ...condition, value: { ...condition.value, max: Number(event.target.value) } })} /></div> : numeric ? <input aria-label="条件数值" type="number" value={typeof condition.value === 'number' ? condition.value : ''} onChange={(event) => onChange({ ...condition, value: Number(event.target.value) } as PredicateCondition)} /> : enumField && typeof condition.value === 'string' ? <select aria-label="条件枚举值" className={stale ? 'select-invalid' : undefined} value={condition.value} onChange={(event) => onChange({ ...condition, value: event.target.value } as PredicateCondition)}>{stale && <option value={staleValue} disabled>{staleValue === '' ? '（空值，已失效）' : `${staleValue}（已失效）`}</option>}{enumOptions.map((value) => <option key={value} value={value}>{value}</option>)}</select> : <span className="boolean-value">{condition.operator === 'isTrue' ? '是' : '否'}</span>}
+        <button className="icon-button condition-remove" aria-label="移除此条件" onClick={onRemove}>×</button>
+      </div>
+      {stale && <div className="stale-hint"><span className="stale-hint-icon">!</span><div className="stale-hint-copy"><strong>{stale.negated ? `选项“${stale.value || '（空值）'}”已被删除或改名` : `条件值“${stale.value || '（空值）'}”已失效`}</strong><span>{stale.negated
+        ? `“不等于”该旧值现在会对“${stale.fieldName}”的所有输入成立，规则语义已经改变。`
+        : `“${stale.fieldName}”当前选项为：${enumOptions.join('、') || '暂无'}。此条件不会再被任何输入命中，样例也无法复现。`}</span></div>{enumOptions.length > 0 && <button type="button" className="text-button stale-align" onClick={() => onChange({ ...condition, value: enumOptions[0] } as PredicateCondition)}>对齐到“{enumOptions[0]}” →</button>}{enumOptions.length === 0 && <button type="button" className="text-button stale-align" disabled>字段已无可用选项</button>}</div>}
     </div>
   );
 }

@@ -51,8 +51,9 @@ export function evaluateSample(project: RuleProject, values: SampleInput): Sampl
       if (typeof value !== 'number' || !Number.isFinite(value)) errors.push(`“${field.name}”必须是有效数值`);
       else if (value < (field.min ?? -Infinity) || value > (field.max ?? Infinity)) errors.push(`“${field.name}”需在 ${field.min} 到 ${field.max} 之间`);
     }
-    if (field.type === 'enum' && (typeof value !== 'string' || !(field.enumValues ?? []).includes(value))) {
-      errors.push(`“${field.name}”需要选择一个合法选项`);
+    if (field.type === 'enum') {
+      if (typeof value !== 'string' || value === '') errors.push(`请选择“${field.name}”`);
+      else if (!(field.enumValues ?? []).includes(value)) errors.push(`“${field.name}”的样例值“${value}”已被删除或改名，请从当前选项中重新选择（当前选项：${(field.enumValues ?? []).join('、') || '暂无'}）`);
     }
     if (field.type === 'boolean' && typeof value !== 'boolean') errors.push(`“${field.name}”需要选择是或否`);
   }

@@ -1,4 +1,5 @@
 import { defaultSample } from '../../domain/conditionEvaluator';
+import { findStaleEnumReferences, findStaleSampleValues } from '../../domain/referenceIntegrity';
 import type { FieldType, RuleField } from '../../models/ruleModel';
 import type { WorkspacePort } from '../../viewmodels/workspacePort';
 
@@ -24,8 +25,23 @@ export class FieldsViewModel {
   updateField(fieldId: string, updates: Partial<RuleField>): void {
     const project = this.workspace.getSnapshot().project;
     if (!project) return;
-    const fields = project.fields.map((field) => field.id === fieldId ? { ...field, ...updates } : field);
-    this.workspace.commitProject({ ...project, fields }, '字段已更新，检查结果将自动刷新');
+    const field = project.fields.find((candidate) => candidate.id === fieldId);
+    const fields = project.fields.map((candidate) => candidate.id === fieldId ? { ...candidate, ...updates } : candidate);
+    const next = { ...project, fields };
+    // 枚举选项删改后，主动核对引用了该字段的规则条件与样例值，避免界面显示与实际判断值脱节
+    if (field?.type === 'enum' && Array.isArray(updates.enumValues)) {
+      const staleConditions = findStaleEnumReferences(next.rules, fields).filter((reference) => reference.fieldId === fieldId);
+      const staleSamples = findStaleSampleValues(next.sampleInputs, fields).filter((reference) => reference.fieldId === fieldId);
+      if (staleConditions.length || staleSamples.length) {
+        const affectedRules = [...new Set(staleConditions.map((reference) => reference.ruleName))];
+        const parts: string[] = [];
+        if (affectedRules.length) parts.push(`${affectedRules.join('、')}的 ${staleConditions.length} 个条件`);
+        if (staleSamples.length) parts.push(`${staleSamples.length} 个样例输入`);
+        this.workspace.commitProject(next, `选项已更新，但 ${parts.join('、')}仍引用已删除或改名的旧值，已在规则工作台标记为失效，请对齐到有效取值`);
+        return;
+      }
+    }
+    this.workspace.commitProject(next, '字段已更新，检查结果将自动刷新');
   }
 
   removeField(fieldId: string): boolean {

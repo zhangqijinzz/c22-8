@@ -1,6 +1,7 @@
 import type { RuleField } from '../../models/ruleModel';
 import type { WorkspaceState } from '../../viewmodels/workspaceViewModel';
 import type { SamplesViewModel } from './samplesViewModel';
+import { findStaleSampleValues } from '../../domain/referenceIntegrity';
 
 interface SamplesViewProps { state: WorkspaceState; viewModel: SamplesViewModel }
 
@@ -16,7 +17,10 @@ export function SamplesView({ state, viewModel }: SamplesViewProps) {
       <div className="sample-layout">
         <section className="sample-input-card card-surface">
           <header className="panel-heading"><div><span className="eyebrow">INPUT VALUES</span><h2>测试输入</h2></div><span className="count-chip">{fields.length} 个字段</span></header>
-          <div className="sample-fields">{fields.map((field) => <SampleField key={field.id} field={field} value={project?.sampleInputs[field.id]} onChange={(value) => viewModel.setValue(field.id, value)} />)}</div>
+          <div className="sample-fields">{(() => {
+            const staleSample = new Map(findStaleSampleValues(project?.sampleInputs ?? {}, fields).map((item) => [item.fieldId, item]));
+            return fields.map((field) => <SampleField key={field.id} field={field} value={project?.sampleInputs[field.id]} stale={staleSample.get(field.id)} onChange={(value) => viewModel.setValue(field.id, value)} />);
+          })()}</div>
           <div className="sample-tip"><span>i</span><p>样例输入会随项目保存。输入超出字段范围时会指出具体字段。</p></div>
         </section>
 
@@ -34,10 +38,13 @@ export function SamplesView({ state, viewModel }: SamplesViewProps) {
   );
 }
 
-interface SampleFieldProps { field: RuleField; value: string | number | boolean | undefined; onChange: (value: string | number | boolean | '') => void }
+interface StaleSample { fieldId: string; fieldName: string; value: string }
 
-function SampleField({ field, value, onChange }: SampleFieldProps) {
-  return <label className="sample-field"><span>{field.name}<small>{field.type === 'number' ? `${field.min}–${field.max}` : field.type === 'enum' ? '枚举值' : '是 / 否'}</small></span>
-    {field.type === 'number' ? <input type="number" min={field.min} max={field.max} value={typeof value === 'number' ? value : ''} onChange={(event) => onChange(event.target.value === '' ? '' : Number(event.target.value))} /> : field.type === 'enum' ? <select value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value)}><option value="">请选择</option>{(field.enumValues ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</select> : <select value={typeof value === 'boolean' ? String(value) : ''} onChange={(event) => onChange(event.target.value === '' ? '' : event.target.value === 'true')}><option value="">请选择</option><option value="true">是</option><option value="false">否</option></select>}
+interface SampleFieldProps { field: RuleField; value: string | number | boolean | undefined; stale?: StaleSample; onChange: (value: string | number | boolean | '') => void }
+
+function SampleField({ field, value, stale, onChange }: SampleFieldProps) {
+  return <label className={`sample-field${stale ? ' sample-field-stale' : ''}`}><span>{field.name}<small>{field.type === 'number' ? `${field.min}–${field.max}` : field.type === 'enum' ? '枚举值' : '是 / 否'}</small></span>
+    {field.type === 'number' ? <input type="number" min={field.min} max={field.max} value={typeof value === 'number' ? value : ''} onChange={(event) => onChange(event.target.value === '' ? '' : Number(event.target.value))} /> : field.type === 'enum' ? <select className={stale ? 'select-invalid' : undefined} value={typeof value === 'string' ? value : ''} onChange={(event) => onChange(event.target.value)}>{stale && <option value={stale.value} disabled>{stale.value}（已失效）</option>}<option value="">请选择</option>{(field.enumValues ?? []).map((item) => <option key={item} value={item}>{item}</option>)}</select> : <select value={typeof value === 'boolean' ? String(value) : ''} onChange={(event) => onChange(event.target.value === '' ? '' : event.target.value === 'true')}><option value="">请选择</option><option value="true">是</option><option value="false">否</option></select>}
+    {stale && <small className="stale-field-note">该样例保存的“{stale.value}”已不在“{field.name}”的选项中，请重新选择，否则无法参与推演</small>}
   </label>;
 }

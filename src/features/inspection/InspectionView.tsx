@@ -1,6 +1,7 @@
 import type { BusinessRule, RuleAnalysis, RuleProject, RuleVersion, SampleInput } from '../../models/ruleModel';
 import type { WorkspaceState } from '../../viewmodels/workspaceViewModel';
 import type { InspectionViewModel } from './inspectionViewModel';
+import { summarizeReferenceIntegrity } from '../../domain/referenceIntegrity';
 
 interface InspectionViewProps { state: WorkspaceState; viewModel: InspectionViewModel; onOpenRule: (ruleId: string) => void }
 
@@ -74,7 +75,10 @@ function formatWitness(values: SampleInput, project: RuleProject): string {
 }
 
 function VersionRow({ version, index, current, onContinue, onCopy }: { version: RuleVersion; index: number; current: boolean; onContinue: () => void; onCopy: () => void }) {
-  return <article className={`version-row${current ? ' version-current' : ''}`}><span className="version-number">{String(index + 1).padStart(2, '0')}</span><div className="version-copy"><strong>{version.name}{current && <em>当前冻结</em>}</strong><span>{formatDate(version.savedAt)} · {version.fields.length} 字段 · {version.rules.length} 条规则</span></div><div className="version-actions">{!version.frozen && <button className="text-button" onClick={onContinue}>从此版本继续</button>}<button className="text-button" onClick={onCopy}>复制为项目</button><span className={version.frozen ? 'version-state frozen' : 'version-state'}>{version.frozen ? '◈ 已冻结' : '◷ 快照'}</span></div></article>;
+  // 版本快照自包含字段定义，按与当前项目相同的口径检查失效引用
+  const { staleConditionCount, staleSampleCount } = summarizeReferenceIntegrity(version.fields, version.rules, version.sampleInputs);
+  const staleCount = staleConditionCount + staleSampleCount;
+  return <article className={`version-row${current ? ' version-current' : ''}`}><span className="version-number">{String(index + 1).padStart(2, '0')}</span><div className="version-copy"><strong>{version.name}{current && <em>当前冻结</em>}{staleCount > 0 && <em className="version-stale" title="该快照中存在引用失效枚举选项的条件或样例，恢复后需对齐">含 {staleCount} 处失效引用</em>}</strong><span>{formatDate(version.savedAt)} · {version.fields.length} 字段 · {version.rules.length} 条规则{staleCount > 0 ? ` · ${staleConditionCount} 个失效条件${staleSampleCount ? `、${staleSampleCount} 个失效样例` : ''}，恢复后需在规则工作台对齐` : ''}</span></div><div className="version-actions">{!version.frozen && <button className="text-button" onClick={onContinue}>从此版本继续</button>}<button className="text-button" onClick={onCopy}>复制为项目</button><span className={version.frozen ? 'version-state frozen' : 'version-state'}>{version.frozen ? '◈ 已冻结' : '◷ 快照'}</span></div></article>;
 }
 
 function formatDate(time: number): string {
